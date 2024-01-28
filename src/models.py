@@ -142,18 +142,25 @@ class LiftSplatShoot(nn.Module):
 
         self.downsample = 16
         self.camC = 64
+        #核心： 视锥
         self.frustum = self.create_frustum()
         self.D, _, _, _ = self.frustum.shape
+        #深度估计
         self.camencode = CamEncode(self.D, self.camC, self.downsample)
         self.bevencode = BevEncode(inC=self.camC, outC=outC)
 
         # toggle using QuickCumsum vs. autograd
         self.use_quickcumsum = True
     
+    """
+    在每个图像特征点位置（高H、宽W）扩展D个深度，最终输出是DxHxWx3，
+    其中3表示特征点和深度坐标[h, w, d]，这里只是初步对1个相机视角的感知空间进行划分
+    ，形成视锥点云。后续会扩展到N个相机，并把视锥点云放到ego周围的空间，也会基于空间范围对点云进行筛选。
+    """
     def create_frustum(self):
         # make grid in image plane
-        ogfH, ogfW = self.data_aug_conf['final_dim']
-        fH, fW = ogfH // self.downsample, ogfW // self.downsample
+        ogfH, ogfW = self.data_aug_conf['final_dim'] #128x352
+        fH, fW = ogfH // self.downsample, ogfW // self.downsample #16倍降采样，8x22
         ds = torch.arange(*self.grid_conf['dbound'], dtype=torch.float).view(-1, 1, 1).expand(-1, fH, fW)
         D, _, _ = ds.shape
         xs = torch.linspace(0, ogfW - 1, fW, dtype=torch.float).view(1, 1, fW).expand(D, fH, fW)
